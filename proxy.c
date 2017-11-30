@@ -18,6 +18,8 @@ char cached_path[MAXLINE];
 unsigned char cached_obj[MAX_OBJECT_SIZE];
 int cached_size = 0;
 sbuf_t connection_buffer;
+sbuf_t logging_buffer;
+FILE *fp;
 
 void doit(int fd);
 void read_requesthdrs(rio_t *rp);
@@ -26,6 +28,7 @@ void clienterror(int fd, char *cause, char *errnum,
 								 char *shortmsg, char *longmsg);
 void build_and_send_request(int conn, int fd, rio_t *rp, char *hostname, char *port, char *path, char *response);
 void *thread(void *argp);
+void *logger(void *argp);
 
 int main(int argc, char **argv)
 {
@@ -46,25 +49,43 @@ int main(int argc, char **argv)
   int connfd;
 
 	sbuf_init(&connection_buffer, NCONS);
+	sbuf_init(&logging_buffer, NLOGS);
 
 	for (int i = 0; i < NTHREADS; i++) /* Create worker threads */
 		Pthread_create(&tid, NULL, thread, NULL);
+
+	// Logging thread
+	Pthread_create(&tid, NULL, logger, NULL);
 
 	while (1)
 	{
 		connfd = Accept(listenfd, (SA *)&clientaddr, &clientlen);
 		Getnameinfo((SA *)&clientaddr, clientlen, hostname, MAXLINE,
 								port, MAXLINE, 0);
-		printf("Accepted connection from (%s, %s)\n", hostname, port);
-		sbuf_insert(&connection_buffer, connfd);
+		char *logline = malloc(sizeof(char) * MAXLINE);
+		sprintf(logline, "Accepted connection from (%s, %s)\n", hostname, port);
+		sbuf_insert(&logging_buffer, logline);
+		sbuf_insert(&connection_buffer, (char*)connfd);
 	}
 }
 
 void *thread(void *argp) {
 	Pthread_detach(pthread_self());
 	while (1) {
-		int fd = sbuf_remove(&connection_buffer);
+		int fd = (int)sbuf_remove(&connection_buffer);
 		doit(fd);
+	}
+	return NULL;
+}
+
+void *logger(void *argp) {
+	Pthread_detach(pthread_self());
+	fp = fopen("server.log", "a");
+	while (1) {
+		char *logline = sbuf_remove(&logging_buffer);
+		printf("%s\n", logline);
+		fprintf(fp, "%s", logline);
+		fflush(fp);
 	}
 	return NULL;
 }

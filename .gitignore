@@ -5,3 +5,4 @@ tiny/
 .DS_Store
 *.o
 proxy
+*.log

@@ -6,7 +6,7 @@
 /* $begin sbuf_init */
 void sbuf_init(sbuf_t *sp, int n)
 {
-    sp->buf = Calloc(n, sizeof(int));
+    sp->buf = Calloc(n, sizeof(char*));
     sp->n = n;                       /* Buffer holds max of n items */
     sp->front = sp->rear = 0;        /* Empty buffer iff front == rear */
     Sem_init(&sp->mutex, 0, 1);      /* Binary semaphore for locking */
@@ -25,7 +25,7 @@ void sbuf_deinit(sbuf_t *sp)
 
 /* Insert item onto the rear of shared buffer sp */
 /* $begin sbuf_insert */
-void sbuf_insert(sbuf_t *sp, int item)
+void sbuf_insert(sbuf_t *sp, char *item)
 {
     P(&sp->slots);                          /* Wait for available slot */
     P(&sp->mutex);                          /* Lock the buffer */
@@ -37,9 +37,9 @@ void sbuf_insert(sbuf_t *sp, int item)
 
 /* Remove and return the first item from buffer sp */
 /* $begin sbuf_remove */
-int sbuf_remove(sbuf_t *sp)
+char* sbuf_remove(sbuf_t *sp)
 {
-    int item;
+    char* item;
     P(&sp->items);                          /* Wait for available item */
     P(&sp->mutex);                          /* Lock the buffer */
     item = sp->buf[(++sp->front)%(sp->n)];  /* Remove the item */
@@ -52,7 +52,7 @@ void sbuf_print(sbuf_t *sp)
 {
   P(&sp->mutex);                          /* Lock the buffer */
   for (int i = 0; i < sp->n; i++) {
-    printf("%d\n", sp->buf[i]);
+    printf("%s\n", sp->buf[i]);
   }
   V(&sp->mutex);                          /* Unlock the buffer */
 }
