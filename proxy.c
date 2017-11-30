@@ -8,6 +8,9 @@
 #define MAX_CACHE_SIZE 1049000
 #define MAX_OBJECT_SIZE 102400
 
+#define NCons 23
+#define NLogs 23
+
 /* You won't lose style points for including this long line in your code */
 static const char *user_agent_hdr = "User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3) Gecko/20120305 Firefox/10.0.3\r\n";
 char cached_path[MAXLINE];
@@ -37,32 +40,28 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 	listenfd = Open_listenfd(argv[1]);
-  int* connfd;
+  int connfd;
 
-	sbuf_init(&connection_buffer, 8);
+	sbuf_init(&connection_buffer, NCons);
 
 	while (1)
 	{
 		clientlen = sizeof(clientaddr);
-        	connfd = malloc(sizeof(int));
-		*connfd = Accept(listenfd, (SA *)&clientaddr, &clientlen);
+		connfd = Accept(listenfd, (SA *)&clientaddr, &clientlen);
 		Getnameinfo((SA *)&clientaddr, clientlen, hostname, MAXLINE,
 								port, MAXLINE, 0);
 		printf("Accepted connection from (%s, %s)\n", hostname, port);
 
-		sbuf_insert(&connection_buffer, *connfd);
-
-		// print the buffer
-		sbuf_print(&connection_buffer);
+		sbuf_insert(&connection_buffer, connfd);
 
 		pthread_t tid;
-		Pthread_create(&tid, NULL, thread, connfd);
+		Pthread_create(&tid, NULL, thread, NULL);
 	}
 }
 
 void *thread(void *argp) {
 	Pthread_detach(pthread_self());
-	int fd = *((int *)argp);
+	int fd = sbuf_remove(&connection_buffer);
 	doit(fd);
 	Pthread_exit(NULL);
 	return NULL;
