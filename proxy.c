@@ -3,6 +3,7 @@
 #include "sbuf.h"
 #include <pthread.h>
 #include <stdio.h>
+#include <time.h>
 
 /* Recommended max cache and object sizes */
 #define MAX_CACHE_SIZE 1049000
@@ -19,7 +20,6 @@ unsigned char cached_obj[MAX_OBJECT_SIZE];
 int cached_size = 0;
 sbuf_t connection_buffer;
 sbuf_t logging_buffer;
-FILE *fp;
 
 void doit(int fd);
 void read_requesthdrs(rio_t *rp);
@@ -62,9 +62,6 @@ int main(int argc, char **argv)
 		connfd = Accept(listenfd, (SA *)&clientaddr, &clientlen);
 		Getnameinfo((SA *)&clientaddr, clientlen, hostname, MAXLINE,
 								port, MAXLINE, 0);
-		char *logline = malloc(sizeof(char) * MAXLINE);
-		sprintf(logline, "Accepted connection from (%s, %s)\n", hostname, port);
-		sbuf_insert(&logging_buffer, logline);
 		sbuf_insert(&connection_buffer, (char*)connfd);
 	}
 }
@@ -80,6 +77,7 @@ void *thread(void *argp) {
 
 void *logger(void *argp) {
 	Pthread_detach(pthread_self());
+	FILE *fp;
 	fp = fopen("server.log", "a");
 	while (1) {
 		char *logline = sbuf_remove(&logging_buffer);
@@ -101,7 +99,6 @@ void doit(int fd)
 	if (!Rio_readlineb(&rio, buf, MAXLINE))
 		return;
 
-	printf("ORIGINAL REQUEST \n %s", buf);
 	sscanf(buf, "%s %s %s", method, uri, version);
 	if (strcasecmp(method, "GET"))
 	{
@@ -111,10 +108,6 @@ void doit(int fd)
 	}
 
 	parse_uri(uri, hostname, port, path);
-
-	printf("hostname: %s\n", hostname);
-	printf("port: %s\n", port);
-	printf("path: %s\n", path);
 
 	/* still need to check for Host */
 
@@ -138,11 +131,20 @@ void doit(int fd)
 
 		build_and_send_request(conn, fd, &rio, hostname, port, path, response);
     int size = 0;
+		int total_size = 0;
     while ((size = recv(conn, response, MAXLINE, 0))) {
+				total_size += size;
         send(fd, response, size, 0);
    	}
 		Close(conn);
 	// }
+
+	time_t t = time(NULL);
+	struct tm tm = *localtime(&t);
+
+	char *logline = malloc(sizeof(char) * MAXLINE);
+	sprintf(logline, "[%d-%d-%d %d:%d:%d] %s %s %s %d\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, method, uri, version, total_size);
+	sbuf_insert(&logging_buffer, logline);
 
 	memset(port, 0, MAXLINE);
 	memset(hostname, 0, MAXLINE);
@@ -170,31 +172,31 @@ void build_and_send_request(int conn, int fd, rio_t *rp, char *hostname, char *p
 {
 	char buf[MAXLINE];
 
-	printf("\nBEGIN REQUEST\n\n");
+	// printf("\nBEGIN REQUEST\n\n");
 
 	/* Print the HTTP response */
 	sprintf(buf, "GET %s HTTP/1.0\r\n", path);
 	Rio_writen(conn, buf, strlen(buf));
-	printf("%s", buf);
+	// printf("%s", buf);
 	sprintf(buf, "Host: %s\r\n", hostname);
 	Rio_writen(conn, buf, strlen(buf));
-	printf("%s", buf);
+	// printf("%s", buf);
 	sprintf(buf, "User-Agent: %s", user_agent_hdr);
 	Rio_writen(conn, buf, strlen(buf));
-	printf("%s", buf);
+	// printf("%s", buf);
 	sprintf(buf, "Connection: close\r\n");
 	Rio_writen(conn, buf, strlen(buf));
-	printf("%s", buf);
+	// printf("%s", buf);
 	sprintf(buf, "Proxy-Connection: close\r\n");
 	Rio_writen(conn, buf, strlen(buf));
-	printf("%s", buf);
+	// printf("%s", buf);
 
 	/* Send other headers from request */
 	Rio_readlineb(rp, buf, MAXLINE);
 	if (!reservedHeader(buf))
 	{
 		Rio_writen(conn, buf, strlen(buf));
-		printf("%s", buf);
+		// printf("%s", buf);
 	}
 	while (strcmp(buf, "\r\n"))
 	{
@@ -202,10 +204,10 @@ void build_and_send_request(int conn, int fd, rio_t *rp, char *hostname, char *p
 		if (!reservedHeader(buf))
 		{
 			Rio_writen(conn, buf, strlen(buf));
-			printf("%s", buf);
+			// printf("%s", buf);
 		}
 	}
-	printf("\nEND REQUEST\n");
+	// printf("\nEND REQUEST\n");
 }
 
 void parse_uri(char *uri, char *hostname, char *port, char *path)
@@ -259,9 +261,9 @@ void parse_uri(char *uri, char *hostname, char *port, char *path)
 		strcpy(path, uri);
 	}
 
-	printf("hostname: %s\n", hostname);
-	printf("port: %s\n", port);
-	printf("path: %s\n", path);
+	// printf("hostname: %s\n", hostname);
+	// printf("port: %s\n", port);
+	// printf("path: %s\n", path);
 }
 
 void clienterror(int fd, char *cause, char *errnum,
