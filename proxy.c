@@ -8,8 +8,9 @@
 #define MAX_CACHE_SIZE 1049000
 #define MAX_OBJECT_SIZE 102400
 
-#define NCons 23
-#define NLogs 23
+#define NCONS 23
+#define NLOGS 23
+#define NTHREADS 8
 
 /* You won't lose style points for including this long line in your code */
 static const char *user_agent_hdr = "User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3) Gecko/20120305 Firefox/10.0.3\r\n";
@@ -29,9 +30,11 @@ void *thread(void *argp);
 int main(int argc, char **argv)
 {
   int listenfd;
+	pthread_t tid;
 	char hostname[MAXLINE], port[MAXLINE];
 	socklen_t clientlen;
 	struct sockaddr_storage clientaddr;
+	clientlen = sizeof(clientaddr);
 
 	/* Check command line args */
 	if (argc != 2)
@@ -42,28 +45,28 @@ int main(int argc, char **argv)
 	listenfd = Open_listenfd(argv[1]);
   int connfd;
 
-	sbuf_init(&connection_buffer, NCons);
+	sbuf_init(&connection_buffer, NCONS);
+
+	for (int i = 0; i < NTHREADS; i++) /* Create worker threads */
+		Pthread_create(&tid, NULL, thread, NULL);
 
 	while (1)
 	{
-		clientlen = sizeof(clientaddr);
+		// Getnameinfo((SA *)&clientaddr, clientlen, hostname, MAXLINE,
+		// 						port, MAXLINE, 0);
+		// printf("Accepted connection from (%s, %s)\n", hostname, port);
+
 		connfd = Accept(listenfd, (SA *)&clientaddr, &clientlen);
-		Getnameinfo((SA *)&clientaddr, clientlen, hostname, MAXLINE,
-								port, MAXLINE, 0);
-		printf("Accepted connection from (%s, %s)\n", hostname, port);
-
 		sbuf_insert(&connection_buffer, connfd);
-
-		pthread_t tid;
-		Pthread_create(&tid, NULL, thread, NULL);
 	}
 }
 
 void *thread(void *argp) {
 	Pthread_detach(pthread_self());
-	int fd = sbuf_remove(&connection_buffer);
-	doit(fd);
-	Pthread_exit(NULL);
+	while (1) {
+		int fd = sbuf_remove(&connection_buffer);
+		doit(fd);
+	}
 	return NULL;
 }
 

@@ -1,0 +1,7 @@
+tiny/
+.vscode/
+.proxy/
+.noproxy/
+.DS_Store
+*.o
+proxy
