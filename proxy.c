@@ -13,6 +13,7 @@ static const char *user_agent_hdr = "User-Agent: Mozilla/5.0 (X11; Linux x86_64;
 char cached_path[MAXLINE];
 unsigned char cached_obj[MAX_OBJECT_SIZE];
 int cached_size = 0;
+sbuf_t connection_buffer;
 
 void doit(int fd);
 void read_requesthdrs(rio_t *rp);
@@ -24,7 +25,7 @@ void *thread(void *argp);
 
 int main(int argc, char **argv)
 {
-    int listenfd;
+  int listenfd;
 	char hostname[MAXLINE], port[MAXLINE];
 	socklen_t clientlen;
 	struct sockaddr_storage clientaddr;
@@ -36,7 +37,10 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 	listenfd = Open_listenfd(argv[1]);
-    	int* connfd;
+  int* connfd;
+
+	sbuf_init(&connection_buffer, 8);
+
 	while (1)
 	{
 		clientlen = sizeof(clientaddr);
@@ -46,13 +50,13 @@ int main(int argc, char **argv)
 								port, MAXLINE, 0);
 		printf("Accepted connection from (%s, %s)\n", hostname, port);
 
-		sbuf_t connection_buffer;
-		sbuf_init(&connection_buffer, 8);
 		sbuf_insert(&connection_buffer, *connfd);
 
 		// print the buffer
+		sbuf_print(&connection_buffer);
+
 		pthread_t tid;
-		Pthread_create(&tid, NULL, doit, connfd);
+		Pthread_create(&tid, NULL, thread, connfd);
 	}
 }
 
@@ -61,11 +65,11 @@ void *thread(void *argp) {
 	int fd = *((int *)argp);
 	doit(fd);
 	Pthread_exit(NULL);
+	return NULL;
 }
 
 void doit(int fd)
 {
-	struct stat sbuf;
 	char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE],
 			hostname[MAXLINE], port[MAXLINE], path[MAXLINE];
 	rio_t rio;
@@ -102,21 +106,21 @@ void doit(int fd)
 	}
 
 	unsigned char *cached_object;
-	if (cached_object = get_object(path)) {
-		printf("%s", cached_object);
-	}
-	else {
+	// if ((cached_object = get_object(path))) {
+	// 	printf("%s", cached_object);
+	// }
+	// else {
 		int conn = Open_clientfd(hostname, port);
 
 		char response[MAXLINE];
 
 		build_and_send_request(conn, fd, &rio, hostname, port, path, response);
     int size = 0;
-    while (size = recv(conn, response, MAXLINE, NULL)) {
+    while ((size = recv(conn, response, MAXLINE, 0))) {
         send(fd, response, size, 0);
    	}
 		Close(conn);
-	}
+	// }
 
 	memset(port, 0, MAXLINE);
 	memset(hostname, 0, MAXLINE);

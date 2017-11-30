@@ -50,9 +50,11 @@ int sbuf_remove(sbuf_t *sp)
 
 void sbuf_print(sbuf_t *sp)
 {
+  P(&sp->mutex);                          /* Lock the buffer */
   for (int i = 0; i < sp->n; i++) {
-    printf("%d", sp->buf[i]);
+    printf("%d\n", sp->buf[i]);
   }
+  V(&sp->mutex);                          /* Unlock the buffer */
 }
 /* $end sbuf_remove */
 /* $end sbufc */
