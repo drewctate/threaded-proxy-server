@@ -27,11 +27,12 @@ void pop_head() {
   cache_size -= HEAD->size;
   cache_obj *temp = HEAD;
   HEAD = HEAD->next;
-  free(temp);
+  Free(temp);
 }
 
 void cache_object(char* url, unsigned char *data, int data_size) {
   if (data_size > MAX_OBJECT_SIZE) {
+    printf("TOO BIG TO CACHE\n");
     return;
   }
   P(&cache_sem);
@@ -55,14 +56,25 @@ void cache_object(char* url, unsigned char *data, int data_size) {
   V(&cache_sem);
 }
 
-unsigned char *cache_get_object(char *url) {
-  printf("getting object!\n");
+void cache_print() {
+  P(&cache_sem);
+  cache_obj *search = HEAD;
+  while (search) {
+    printf("%s %d\n", search->url, search->size);
+    search = search->next;
+  }
+  V(&cache_sem);
+}
+
+unsigned char *cache_get_object(char *url, int *size) {
   P(&cache_sem);
   cache_obj *search = HEAD;
   while (search) {
     if (!strcmp(search->url, url)) {
+      *size = search->size;
       return search->data;
     }
+    search = search->next;
   }
   V(&cache_sem);
   return NULL;

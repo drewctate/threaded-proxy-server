@@ -57,6 +57,8 @@ int main(int argc, char **argv)
 	// Logging thread
 	Pthread_create(&tid, NULL, logger, NULL);
 
+	cache_init();
+
 	while (1)
 	{
 		connfd = Accept(listenfd, (SA *)&clientaddr, &clientlen);
@@ -120,35 +122,48 @@ void doit(int fd)
 		strcpy(hostname, "www.facebook.com");
 	}
 
+	cache_print();
+
 	unsigned char *cached_object;
-	// if ((cached_object = get_object(path))) {
-	// 	printf("%s", cached_object);
-	// }
-	// else {
+	int *object_size = malloc(sizeof(int));
+	if ((cached_object = cache_get_object(path, object_size))) {
+		printf("CACHED %d\n", *object_size);
+		// printf("%s", cached_object);
+		send(fd, cached_object, *object_size, 0);
+	}
+	else {
+		printf("NOT CACHED\n");
 		int conn = Open_clientfd(hostname, port);
 
 		char response[MAXLINE];
 
 		build_and_send_request(conn, fd, &rio, hostname, port, path, response);
     int size = 0;
-		int total_size = 0;
+		*object_size = 0;
+		unsigned char *object_to_cache = malloc(sizeof(unsigned char) * MAX_OBJECT_SIZE);
     while ((size = recv(conn, response, MAXLINE, 0))) {
-				total_size += size;
+				if (*object_size + size < MAX_OBJECT_SIZE) {
+					memcpy(&object_to_cache[*object_size], response, size);
+				}
+				*object_size += size;
         send(fd, response, size, 0);
    	}
 		Close(conn);
-	// }
+
+		cache_object(path, object_to_cache, *object_size);
+		printf("object cached!");
+	}
+	Close(fd);
 
 	time_t t = time(NULL);
 	struct tm tm = *localtime(&t);
 
 	char *logline = malloc(sizeof(char) * MAXLINE);
-	sprintf(logline, "[%d-%d-%d %d:%d:%d] %s %s %s %d\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, method, uri, version, total_size);
+	sprintf(logline, "[%d-%d-%d %d:%d:%d] %s %s %s %d\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, method, uri, version, *object_size);
 	sbuf_insert(&logging_buffer, logline);
 
 	memset(port, 0, MAXLINE);
 	memset(hostname, 0, MAXLINE);
-    Close(fd);
 }
 
 int reservedHeader(char *header_line)
