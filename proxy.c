@@ -24,15 +24,14 @@ sbuf_t logging_buffer;
 void doit(int fd);
 void read_requesthdrs(rio_t *rp);
 void parse_uri(char *uri, char *hostname, char *path, char *port);
-void clienterror(int fd, char *cause, char *errnum,
-								 char *shortmsg, char *longmsg);
+void clienterror(int fd, char *cause, char *errnum, char *shortmsg, char *longmsg);
 void build_and_send_request(int conn, int fd, rio_t *rp, char *hostname, char *port, char *path, char *response);
 void *thread(void *argp);
 void *logger(void *argp);
 
 int main(int argc, char **argv)
 {
-  int listenfd;
+	int listenfd;
 	pthread_t tid;
 	char hostname[MAXLINE], port[MAXLINE];
 	socklen_t clientlen;
@@ -46,7 +45,7 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 	listenfd = Open_listenfd(argv[1]);
-  int connfd;
+	int connfd;
 
 	sbuf_init(&connection_buffer, NCONS);
 	sbuf_init(&logging_buffer, NLOGS);
@@ -63,25 +62,29 @@ int main(int argc, char **argv)
 	{
 		connfd = Accept(listenfd, (SA *)&clientaddr, &clientlen);
 		Getnameinfo((SA *)&clientaddr, clientlen, hostname, MAXLINE,
-								port, MAXLINE, 0);
-		sbuf_insert(&connection_buffer, (char*)connfd);
+					port, MAXLINE, 0);
+		sbuf_insert(&connection_buffer, (char *)connfd);
 	}
 }
 
-void *thread(void *argp) {
+void *thread(void *argp)
+{
 	Pthread_detach(pthread_self());
-	while (1) {
+	while (1)
+	{
 		int fd = (int)sbuf_remove(&connection_buffer);
 		doit(fd);
 	}
 	return NULL;
 }
 
-void *logger(void *argp) {
+void *logger(void *argp)
+{
 	Pthread_detach(pthread_self());
 	FILE *fp;
 	fp = fopen("server.log", "a");
-	while (1) {
+	while (1)
+	{
 		char *logline = sbuf_remove(&logging_buffer);
 		printf("%s\n", logline);
 		fprintf(fp, "%s", logline);
@@ -93,7 +96,7 @@ void *logger(void *argp) {
 void doit(int fd)
 {
 	char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE],
-			hostname[MAXLINE], port[MAXLINE], path[MAXLINE];
+		hostname[MAXLINE], port[MAXLINE], path[MAXLINE];
 	rio_t rio;
 
 	/* Read request line and headers */
@@ -105,7 +108,7 @@ void doit(int fd)
 	if (strcasecmp(method, "GET"))
 	{
 		clienterror(fd, method, "501", "Not Implemented",
-								"Proxy does not implement this method");
+					"Proxy does not implement this method");
 		return;
 	}
 
@@ -126,28 +129,32 @@ void doit(int fd)
 
 	unsigned char *cached_object;
 	int *object_size = malloc(sizeof(int));
-	if ((cached_object = cache_get_object(path, object_size))) {
+	if ((cached_object = cache_get_object(path, object_size)))
+	{
 		printf("CACHED %d\n", *object_size);
 		// printf("%s", cached_object);
 		send(fd, cached_object, *object_size, 0);
 	}
-	else {
+	else
+	{
 		printf("NOT CACHED\n");
 		int conn = Open_clientfd(hostname, port);
 
 		char response[MAXLINE];
 
 		build_and_send_request(conn, fd, &rio, hostname, port, path, response);
-    int size = 0;
+		int size = 0;
 		*object_size = 0;
 		unsigned char *object_to_cache = malloc(sizeof(unsigned char) * MAX_OBJECT_SIZE);
-    while ((size = recv(conn, response, MAXLINE, 0))) {
-				if (*object_size + size < MAX_OBJECT_SIZE) {
-					memcpy(&object_to_cache[*object_size], response, size);
-				}
-				*object_size += size;
-        send(fd, response, size, 0);
-   	}
+		while ((size = recv(conn, response, MAXLINE, 0)))
+		{
+			if (*object_size + size < MAX_OBJECT_SIZE)
+			{
+				memcpy(&object_to_cache[*object_size], response, size);
+			}
+			*object_size += size;
+			send(fd, response, size, 0);
+		}
 		Close(conn);
 
 		cache_object(path, object_to_cache, *object_size);
@@ -170,17 +177,15 @@ int reservedHeader(char *header_line)
 {
 	const char s[2] = ":";
 	char *temp[MAXLINE];
-  char *token;
+	char *token;
 	strcpy(temp, header_line);
 
-  /* get the first token */
-  token = strtok(temp, s);
-	return strlen(token) && (
-		!strcmp(token, "Host") ||
-		!strcmp(token, "User-Agent") ||
-		!strcmp(token, "Connection") ||
-		!strcmp(token, "Proxy-Connection")
-	);
+	/* get the first token */
+	token = strtok(temp, s);
+	return strlen(token) && (!strcmp(token, "Host") ||
+							 !strcmp(token, "User-Agent") ||
+							 !strcmp(token, "Connection") ||
+							 !strcmp(token, "Proxy-Connection"));
 }
 
 void build_and_send_request(int conn, int fd, rio_t *rp, char *hostname, char *port, char *path, char *response)
@@ -275,23 +280,18 @@ void parse_uri(char *uri, char *hostname, char *port, char *path)
 		}
 		strcpy(path, uri);
 	}
-
-	// printf("hostname: %s\n", hostname);
-	// printf("port: %s\n", port);
-	// printf("path: %s\n", path);
 }
 
-void clienterror(int fd, char *cause, char *errnum,
-								 char *shortmsg, char *longmsg)
+void clienterror(int fd, char *cause, char *errnum, char *shortmsg, char *longmsg)
 {
 	char buf[MAXLINE], body[MAXBUF];
 
 	/* Build the HTTP response body */
 	sprintf(body, "<html><title>Tiny Error</title>");
 	sprintf(body, "%s<body bgcolor="
-								"ffffff"
-								">\r\n",
-					body);
+				  "ffffff"
+				  ">\r\n",
+			body);
 	sprintf(body, "%s%s: %s\r\n", body, errnum, shortmsg);
 	sprintf(body, "%s<p>%s: %s\r\n", body, longmsg, cause);
 	sprintf(body, "%s<hr><em>The Tiny Web server</em>\r\n", body);
